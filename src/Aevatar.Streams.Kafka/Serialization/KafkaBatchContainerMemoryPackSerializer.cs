@@ -2,6 +2,7 @@ using Confluent.Kafka;
 using Orleans.Serialization;
 using Orleans.Streams.Kafka.Core;
 using System.Text;
+using Aevatar.Streams.Kafka.Serialization;
 
 namespace Orleans.Streams.Kafka.Serialization
 {

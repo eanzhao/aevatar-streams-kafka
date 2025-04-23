@@ -4,19 +4,19 @@ using System.Collections.Concurrent;
 using System.Text;
 using MemoryPack;
 
-namespace Orleans.Serialization
+namespace Aevatar.Streams.Kafka.Serialization
 {
     /// <summary>
-    /// MemoryPack-based serializer to replace OrleansJsonSerializer
+    /// MemoryPack-based serializer for data serialization
     /// </summary>
-    public class MemoryPackSerializer : OrleansJsonSerializer
+    public class MemoryPackSerializer
     {
         private readonly ConcurrentDictionary<Type, object> _emptyInstances = new();
         
         /// <summary>
         /// Serialize an object to string using MemoryPack
         /// </summary>
-        public override string Serialize(object value, Type type)
+        public string Serialize(object value, Type type)
         {
             if (value == null)
                 return "";
@@ -28,7 +28,7 @@ namespace Orleans.Serialization
         /// <summary>
         /// Deserialize a string to an object using MemoryPack
         /// </summary>
-        public override object Deserialize(Type type, string serializedValue)
+        public object Deserialize(Type type, string serializedValue)
         {
             if (string.IsNullOrEmpty(serializedValue))
                 return _emptyInstances.GetOrAdd(type, CreateEmptyInstance);

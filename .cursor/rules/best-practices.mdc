@@ -17,7 +17,7 @@ alwaysApply: true
 
 1. 【执行开发】
    a. 编写接口定义
-   b. 实现核心功能
-   c. 编写单元测试
+   b. 实现核心功能 - 读取[code-practices.mdc](mdc:.cursor/rules/code-practices.mdc)
+   c. 编写单元测试 - 读取[test-practices.mdc](mdc:.cursor/rules/test-practices.mdc)
 
 2. 【测试验证】运行测试直至通过

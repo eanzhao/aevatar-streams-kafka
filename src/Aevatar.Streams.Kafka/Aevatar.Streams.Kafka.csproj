@@ -13,6 +13,7 @@
         <PackageReference Include="Microsoft.Orleans.Core" />
         <PackageReference Include="Microsoft.Orleans.Streaming" />
         <PackageReference Include="Confluent.SchemaRegistry.Serdes.Avro" />
+        <PackageReference Include="MemoryPack" />
     </ItemGroup>
 
     <ItemGroup>

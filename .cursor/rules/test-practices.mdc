@@ -1,5 +1,5 @@
 ---
-description: Unit Test
+description: implement unit test
 globs: 
 alwaysApply: false
 ---
@@ -15,6 +15,7 @@ When working on unit tests, do the following:
     4. Exception Test Cases
 3. Use Arrange, Act and Assert format. 
 4. Implement using SOLID principles.
+5. Only edit test files.
 
 You MUST iterate implementing and fixing unit tests until all the following criteria are met:
 1. At least 80% code coverage.

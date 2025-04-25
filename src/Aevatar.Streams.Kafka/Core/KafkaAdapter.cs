@@ -11,6 +11,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Aevatar.Streams.Kafka.Serialization;
 
 namespace Orleans.Streams.Kafka.Core
 {
@@ -18,7 +19,7 @@ namespace Orleans.Streams.Kafka.Core
 	{
 		private readonly KafkaStreamOptions _options;
 		private readonly IDictionary<string, QueueProperties> _queueProperties;
-		private readonly OrleansJsonSerializer _serializationManager;
+		private readonly OrleansMemoryPackSerializer _serializationManager;
 		private readonly ILoggerFactory _loggerFactory;
 		private readonly IGrainFactory _grainFactory;
 		private readonly IExternalStreamDeserializer _externalDeserializer;
@@ -33,7 +34,7 @@ namespace Orleans.Streams.Kafka.Core
 			string providerName,
 			KafkaStreamOptions options,
 			IDictionary<string, QueueProperties> queueProperties,
-			OrleansJsonSerializer serializationManager,
+			OrleansMemoryPackSerializer serializationManager,
 			ILoggerFactory loggerFactory,
 			IGrainFactory grainFactory,
 			IExternalStreamDeserializer externalDeserializer
@@ -50,7 +51,7 @@ namespace Orleans.Streams.Kafka.Core
 			Name = providerName;
 
 			_producer = new ProducerBuilder<byte[], KafkaBatchContainer>(options.ToProducerProperties())
-				.SetValueSerializer(new KafkaBatchContainerSerializer(serializationManager))
+				.SetValueSerializer(new KafkaBatchContainerMemoryPackSerializer(new MemoryPackSerializer()))
 				.Build();
 		}
 

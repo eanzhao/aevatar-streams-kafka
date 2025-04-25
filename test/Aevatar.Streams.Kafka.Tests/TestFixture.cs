@@ -13,7 +13,7 @@ namespace Aevatar.Streams.Kafka.Tests
     public class TestFixture : IDisposable
     {
         // Use interfaces instead of concrete classes for easier mocking
-        public Mock<IOrleansJsonSerializer> MockSerializer { get; }
+        public Mock<IOrleansMemoryPackSerializer> MockSerializer { get; }
         public Mock<ILoggerFactory> MockLoggerFactory { get; }
         public Mock<IGrainFactory> MockGrainFactory { get; }
         public Mock<IExternalStreamDeserializer> MockDeserializer { get; }
@@ -25,7 +25,7 @@ namespace Aevatar.Streams.Kafka.Tests
         public TestFixture()
         {
             // Use interface for serializer rather than concrete class
-            MockSerializer = new Mock<IOrleansJsonSerializer>();
+            MockSerializer = new Mock<IOrleansMemoryPackSerializer>();
             MockLoggerFactory = new Mock<ILoggerFactory>();
             MockGrainFactory = new Mock<IGrainFactory>();
             MockDeserializer = new Mock<IExternalStreamDeserializer>();
@@ -76,9 +76,9 @@ namespace Aevatar.Streams.Kafka.Tests
         }
     }
 
-    // Create an interface that matches the methods we need from OrleansJsonSerializer
+    // Create an interface that matches the methods we need from OrleansMemoryPackSerializer
     // This makes it mockable without needing a parameterless constructor
-    public interface IOrleansJsonSerializer
+    public interface IOrleansMemoryPackSerializer
     {
         object Deserialize(byte[] data);
         byte[] Serialize(object item);

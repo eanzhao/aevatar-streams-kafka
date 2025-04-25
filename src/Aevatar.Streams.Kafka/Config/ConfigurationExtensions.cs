@@ -2,11 +2,13 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Orleans.Configuration;
+using Orleans.Serialization;
 using Orleans.Streams.Kafka.Config;
 using Orleans.Streams.Kafka.Core;
 using Orleans.Streams.Kafka.Serialization;
 using Orleans.Streams.Utils.Serialization;
 using System;
+using Aevatar.Streams.Kafka.Serialization;
 
 // ReSharper disable once CheckNamespace
 namespace Orleans.Hosting
@@ -39,7 +41,7 @@ namespace Orleans.Hosting
 					services
 						.ConfigureNamedOptionForLogging<KafkaStreamOptions>(providerName)
 						.ConfigureNamedOptionForLogging<HashRingStreamQueueMapperOptions>(providerName)
-						.AddJson(providerName)
+						.AddMemoryPack(providerName)
 					;
 				})
 				.AddPersistentStreams(providerName, KafkaAdapterFactory.Create, stream => stream.Configure(configureOptions))
@@ -74,6 +76,7 @@ namespace Orleans.Hosting
 					services
 						.ConfigureNamedOptionForLogging<KafkaStreamOptions>(providerName)
 						.ConfigureNamedOptionForLogging<HashRingStreamQueueMapperOptions>(providerName)
+						.AddMemoryPack(providerName)
 					;
 				})
 				.AddPersistentStreams(providerName, KafkaAdapterFactory.Create,
@@ -105,27 +108,58 @@ namespace Orleans.Hosting
 			string providerName
 		) => builder.ConfigureServices(services => services.AddJson(providerName));
 
-		private static void AddAvro(this IServiceCollection services, string providerName, string registryUrl)
-			=> services
-				.AddKeyedSingleton<ISchemaRegistryClient>(
-					providerName,
-					(provider, name) => ActivatorUtilities.CreateInstance<CachedSchemaRegistryClient>(
-						provider,
-						new SchemaRegistryConfig
-						{
-							Url = registryUrl
-						})
-				)
-				.AddKeyedSingleton<IExternalStreamDeserializer>(
-					providerName,
-					(provider, name)
-						=> ActivatorUtilities.CreateInstance<AvroExternalStreamDeserializer>(
-							provider,
-							provider.GetRequiredKeyedService<ISchemaRegistryClient>(providerName))
-						);
+		public static IClientBuilder AddMemoryPack(
+			this IClientBuilder builder,
+			string providerName
+		) => builder.ConfigureServices(services => services.AddMemoryPack(providerName));
 
-		private static void AddJson(this IServiceCollection services, string providerName)
-			=> services
-				.AddKeyedSingleton<IExternalStreamDeserializer, JsonExternalStreamDeserializer>(providerName);
+		public static ISiloBuilder AddMemoryPack(
+			this ISiloBuilder builder,
+			string providerName
+		) => builder.ConfigureServices(services => services.AddMemoryPack(providerName));
+	}
+
+	public static class ServiceCollectionExtensions
+	{
+		public static IServiceCollection AddJson(
+			this IServiceCollection services,
+			string providerName
+		) => services.AddKeyedSingleton<IExternalStreamDeserializer>(
+			providerName,
+			(sp, key) => ActivatorUtilities.CreateInstance<JsonExternalStreamDeserializer>(sp)
+		);
+
+		public static IServiceCollection AddAvro(
+			this IServiceCollection services,
+			string providerName,
+			string registryUrl
+		) => services.AddKeyedSingleton<IExternalStreamDeserializer>(
+			providerName,
+			(sp, key) =>
+			{
+				var registryConfig = new SchemaRegistryConfig
+				{
+					Url = registryUrl
+				};
+
+				var registry = new CachedSchemaRegistryClient(registryConfig);
+				return ActivatorUtilities.CreateInstance<AvroExternalStreamDeserializer>(sp, registry);
+			}
+		);
+
+		public static IServiceCollection AddMemoryPack(
+			this IServiceCollection services,
+			string providerName
+		) 
+		{
+			// Register OrleansMemoryPackSerializer
+			services.AddOrleansMemoryPackSerializer();
+			
+			// Register the deserializer
+			return services.AddKeyedSingleton<IExternalStreamDeserializer>(
+				providerName,
+				(sp, key) => ActivatorUtilities.CreateInstance<MemoryPackExternalStreamDeserializer>(sp)
+			);
+		}
 	}
 }

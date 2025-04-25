@@ -938,7 +938,7 @@ namespace Aevatar.Streams.Kafka.Tests.Core
                 _fixture.ProviderName,
                 _queueProperties,
                 _fixture.Options,
-                _fixture.MockSerializer.Object as OrleansJsonSerializer,
+                _fixture.MockSerializer.Object as OrleansMemoryPackSerializer,
                 _fixture.MockLoggerFactory.Object,
                 _fixture.MockGrainFactory.Object,
                 _fixture.MockDeserializer.Object
@@ -982,7 +982,7 @@ namespace Aevatar.Streams.Kafka.Tests.Core
                 _fixture.ProviderName,
                 _queueProperties,
                 _fixture.Options,
-                _fixture.MockSerializer.Object as OrleansJsonSerializer,
+                _fixture.MockSerializer.Object as OrleansMemoryPackSerializer,
                 _fixture.MockLoggerFactory.Object,
                 _fixture.MockGrainFactory.Object,
                 _fixture.MockDeserializer.Object
@@ -1024,7 +1024,7 @@ namespace Aevatar.Streams.Kafka.Tests.Core
                 _fixture.ProviderName,
                 _queueProperties,
                 _fixture.Options,
-                _fixture.MockSerializer.Object as OrleansJsonSerializer,
+                _fixture.MockSerializer.Object as OrleansMemoryPackSerializer,
                 _fixture.MockLoggerFactory.Object,
                 _fixture.MockGrainFactory.Object,
                 _fixture.MockDeserializer.Object

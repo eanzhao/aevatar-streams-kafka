@@ -1,6 +1,7 @@
 using Confluent.Kafka;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Moq;
 using Orleans.Runtime;
 using Orleans.Serialization;
@@ -18,12 +19,23 @@ using System.Reflection;
 using System.Linq;
 using System.Text;
 using Orleans.Streams.Kafka.Producer;
+using System.Threading;
 
 namespace Aevatar.Streams.Kafka.Tests.Core
 {
+    // Create a testable serializer that can be used in place of OrleansMemoryPackSerializer
+    public class TestOrleansMemoryPackSerializer : OrleansMemoryPackSerializer
+    {
+        public TestOrleansMemoryPackSerializer() 
+            : base(Options.Create(new OrleansMemoryPackSerializerOptions()))
+        {
+        }
+    }
+
     public class KafkaAdapterTests
     {
-        private readonly Mock<IOrleansJsonSerializer> _mockSerializer;
+        private readonly Mock<IOrleansMemoryPackSerializer> _mockSerializer;
+        private readonly OrleansMemoryPackSerializer _mockOrleansSerializer;
         private readonly Mock<ILoggerFactory> _mockLoggerFactory;
         private readonly Mock<IGrainFactory> _mockGrainFactory;
         private readonly Mock<IExternalStreamDeserializer> _mockDeserializer;
@@ -36,7 +48,11 @@ namespace Aevatar.Streams.Kafka.Tests.Core
 
         public KafkaAdapterTests()
         {
-            _mockSerializer = new Mock<IOrleansJsonSerializer>();
+            _mockSerializer = new Mock<IOrleansMemoryPackSerializer>();
+            
+            // Use the test serializer that can be instantiated in tests
+            _mockOrleansSerializer = new TestOrleansMemoryPackSerializer();
+            
             _mockLoggerFactory = new Mock<ILoggerFactory>();
             _mockGrainFactory = new Mock<IGrainFactory>();
             _mockDeserializer = new Mock<IExternalStreamDeserializer>();
@@ -145,9 +161,10 @@ namespace Aevatar.Streams.Kafka.Tests.Core
             var streamId = StreamId.Create("test-namespace", Guid.NewGuid());
             var events = new List<object> { "event1" };
             
-            // Configure the producer to throw an exception
+            // Configure the producer to throw an exception with specific error details
+            var errorMessage = "Timed out waiting for response";
             var expectedException = new ProduceException<byte[], KafkaBatchContainer>(
-                new Error(Confluent.Kafka.ErrorCode.Local_TimedOut, "Timed out"),
+                new Error(Confluent.Kafka.ErrorCode.Local_TimedOut, errorMessage),
                 null);
             
             _mockProducer
@@ -158,8 +175,11 @@ namespace Aevatar.Streams.Kafka.Tests.Core
                 .ThrowsAsync(expectedException);
             
             // Act & Assert
-            var exception = await Assert.ThrowsAsync<ProduceException<byte[], KafkaBatchContainer>>(() => 
-                adapter.QueueMessageBatchAsync(streamId, events, null, new Dictionary<string, object>()));
+            var exception = await Assert.ThrowsAsync<ProduceException<byte[], KafkaBatchContainer>>(
+                async () => await adapter.QueueMessageBatchAsync(streamId, events, null, new Dictionary<string, object>()));
+            
+            // Verify exception is rethrown
+            exception.Should().BeSameAs(expectedException, "The original exception should be rethrown");
             
             // Verify error was logged
             _mockLogger.Verify(
@@ -167,11 +187,9 @@ namespace Aevatar.Streams.Kafka.Tests.Core
                     LogLevel.Error,
                     It.IsAny<EventId>(),
                     It.Is<It.IsAnyType>((v, t) => true),
-                    It.IsAny<Exception>(),
+                    It.Is<Exception>(ex => ex == expectedException),
                     It.IsAny<Func<It.IsAnyType, Exception, string>>()),
                 Times.Once);
-            
-            exception.Should().BeSameAs(expectedException);
         }
         
         [Fact]
@@ -273,23 +291,20 @@ namespace Aevatar.Streams.Kafka.Tests.Core
         public void CreateReceiver_WithMultipleQueueIds_ShouldCreateAppropriateReceivers()
         {
             // Arrange
-            // Create a dictionary with multiple queue properties
             var multiQueueProperties = new Dictionary<string, QueueProperties>
             {
                 { "namespace1", new QueueProperties("namespace1", 0) },
                 { "namespace2", new QueueProperties("namespace2", 1) }
             };
             
-            // Create an adapter with these custom queue properties
-            var adapter = new TestKafkaAdapter(
+            var adapter = new KafkaAdapter(
                 _providerName,
                 _options,
                 multiQueueProperties,
-                _mockSerializer.Object as OrleansJsonSerializer,
+                _mockOrleansSerializer,
                 _mockLoggerFactory.Object,
                 _mockGrainFactory.Object,
-                _mockDeserializer.Object,
-                _mockProducer.Object
+                _mockDeserializer.Object
             );
             
             // Act - Create receivers for different queue IDs
@@ -376,21 +391,19 @@ namespace Aevatar.Streams.Kafka.Tests.Core
         public void CreateReceiver_WithEmptyNamespaceQueueId_ShouldHandleCorrectly()
         {
             // Arrange
-            // Create queue properties with an empty namespace
             var emptyNamespaceQueueProperties = new Dictionary<string, QueueProperties>
             {
-                { "", new QueueProperties("", 0) }
+                { string.Empty, new QueueProperties(string.Empty, 0) }
             };
             
-            var adapter = new TestKafkaAdapter(
+            var adapter = new KafkaAdapter(
                 _providerName,
                 _options,
                 emptyNamespaceQueueProperties,
-                _mockSerializer.Object as OrleansJsonSerializer,
+                _mockOrleansSerializer,
                 _mockLoggerFactory.Object,
                 _mockGrainFactory.Object,
-                _mockDeserializer.Object,
-                _mockProducer.Object
+                _mockDeserializer.Object
             );
             
             // Create a QueueId with an empty namespace
@@ -924,6 +937,105 @@ namespace Aevatar.Streams.Kafka.Tests.Core
         }
         
         [Fact]
+        public async Task ProduceExtensionMethod_ShouldRunAsynchronously()
+        {
+            // Arrange
+            var streamId = StreamId.Create("test-namespace", Guid.NewGuid());
+            var events = new List<object> { "event1" };
+            var batch = new KafkaBatchContainer(streamId, events, null);
+            
+            // Use ManualResetEventSlim with increased timeouts
+            var asyncOperationStarted = new ManualResetEventSlim(false);
+            var asyncOperationAllowedToComplete = new ManualResetEventSlim(false);
+            var asyncOperationCompleted = new ManualResetEventSlim(false);
+            
+            var expectedResult = new DeliveryResult<byte[], KafkaBatchContainer>
+            {
+                Status = PersistenceStatus.Persisted,
+                Message = new Message<byte[], KafkaBatchContainer> { Value = batch }
+            };
+            
+            // Setup mock producer with controlled async behavior
+            _mockProducer
+                .Setup(p => p.ProduceAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<Message<byte[], KafkaBatchContainer>>(),
+                    It.IsAny<CancellationToken>()))
+                .Returns(() => 
+                {
+                    // Signal that the async operation has started
+                    asyncOperationStarted.Set();
+                    
+                    // Return a task that completes only when we allow it to
+                    return Task.Run(async () => 
+                    {
+                        try
+                        {
+                            // Wait until the test signals that the operation can complete
+                            bool signalReceived = asyncOperationAllowedToComplete.Wait(TimeSpan.FromSeconds(30));
+                            
+                            if (!signalReceived)
+                            {
+                                throw new TimeoutException("Test timed out waiting for asyncOperationAllowedToComplete signal");
+                            }
+                            
+                            // Simulate work
+                            await Task.Delay(10);
+                            
+                            // Signal completion
+                            asyncOperationCompleted.Set();
+                            
+                            return expectedResult;
+                        }
+                        catch (Exception)
+                        {
+                            // Ensure we set the completed event even on failure
+                            asyncOperationCompleted.Set();
+                            throw;
+                        }
+                    });
+                });
+            
+            // Act
+            var produceTask = _mockProducer.Object.Produce(batch);
+            
+            try
+            {
+                // Assert
+                // Verify the operation has started
+                asyncOperationStarted.Wait(TimeSpan.FromSeconds(30)).Should().BeTrue("The operation should start");
+                
+                // Verify the task hasn't completed yet (it's waiting for our signal)
+                produceTask.IsCompleted.Should().BeFalse("The operation should not complete synchronously");
+                
+                // Allow the operation to complete
+                asyncOperationAllowedToComplete.Set();
+                
+                // Wait for the async operation to finish
+                asyncOperationCompleted.Wait(TimeSpan.FromSeconds(30)).Should().BeTrue("The async operation should complete");
+                
+                // Await the task to avoid unobserved exceptions
+                await produceTask;
+                
+                // Verify the method was called
+                _mockProducer.Verify(
+                    p => p.ProduceAsync(
+                        It.IsAny<string>(),
+                        It.IsAny<Message<byte[], KafkaBatchContainer>>(),
+                        It.IsAny<CancellationToken>()),
+                    Times.Once,
+                    "ProduceAsync should be called exactly once");
+            }
+            finally
+            {
+                // Clean up resources
+                asyncOperationStarted.Dispose();
+                asyncOperationAllowedToComplete.Dispose();
+                asyncOperationCompleted.Dispose();
+            }
+        }
+        
+        [Fact]
         public async Task ProduceExtensionMethod_ShouldCallProduceAsyncWithCorrectParameters()
         {
             // Arrange
@@ -1027,54 +1139,6 @@ namespace Aevatar.Streams.Kafka.Tests.Core
             capturedMessage.Key.Should().BeEquivalentTo(expectedKey);
         }
         
-        [Fact]
-        public async Task ProduceExtensionMethod_ShouldRunAsynchronously()
-        {
-            // Arrange
-            var streamId = StreamId.Create("test-namespace", Guid.NewGuid());
-            var events = new List<object> { "event1" };
-            var batch = new KafkaBatchContainer(streamId, events, null);
-            
-            var completionSource = new TaskCompletionSource<bool>();
-            var asyncOperationCompleted = false;
-            
-            _mockProducer
-                .Setup(p => p.ProduceAsync(
-                    It.IsAny<string>(),
-                    It.IsAny<Message<byte[], KafkaBatchContainer>>(),
-                    It.IsAny<CancellationToken>()))
-                .Callback(async () => 
-                {
-                    // Simulate some asynchronous work
-                    await Task.Delay(100);
-                    asyncOperationCompleted = true;
-                    completionSource.SetResult(true);
-                })
-                .ReturnsAsync(new DeliveryResult<byte[], KafkaBatchContainer>
-                {
-                    Status = PersistenceStatus.Persisted
-                });
-            
-            // Act
-            var produceTask = _mockProducer.Object.Produce(batch);
-            
-            // Assert
-            // The operation should complete asynchronously
-            asyncOperationCompleted.Should().BeFalse("The operation should not complete synchronously");
-            
-            // Wait for the async operation to complete
-            await completionSource.Task;
-            await produceTask;
-            
-            asyncOperationCompleted.Should().BeTrue("The operation should eventually complete");
-            _mockProducer.Verify(
-                p => p.ProduceAsync(
-                    It.IsAny<string>(),
-                    It.IsAny<Message<byte[], KafkaBatchContainer>>(),
-                    It.IsAny<CancellationToken>()),
-                Times.Once);
-        }
-        
         private KafkaAdapter CreateAdapter(bool useRealProducer = true)
         {
             return CreateAdapter(_options, useRealProducer);
@@ -1088,7 +1152,7 @@ namespace Aevatar.Streams.Kafka.Tests.Core
                     _providerName,
                     options,
                     _queueProperties,
-                    _mockSerializer.Object as OrleansJsonSerializer,
+                    _mockOrleansSerializer,
                     _mockLoggerFactory.Object,
                     _mockGrainFactory.Object,
                     _mockDeserializer.Object
@@ -1101,7 +1165,7 @@ namespace Aevatar.Streams.Kafka.Tests.Core
                     _providerName,
                     options,
                     _queueProperties,
-                    _mockSerializer.Object as OrleansJsonSerializer,
+                    _mockOrleansSerializer,
                     _mockLoggerFactory.Object,
                     _mockGrainFactory.Object,
                     _mockDeserializer.Object,
@@ -1123,7 +1187,7 @@ namespace Aevatar.Streams.Kafka.Tests.Core
                 string providerName,
                 KafkaStreamOptions options,
                 IDictionary<string, QueueProperties> queueProperties,
-                OrleansJsonSerializer serializationManager,
+                OrleansMemoryPackSerializer serializationManager,
                 ILoggerFactory loggerFactory,
                 IGrainFactory grainFactory,
                 IExternalStreamDeserializer externalDeserializer,

@@ -7,6 +7,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <PackageReference Include="MemoryPack.Core" />
         <PackageReference Include="Microsoft.Extensions.Logging" />
         <PackageReference Include="Confluent.Kafka" />
         <PackageReference Include="Microsoft.Orleans.Sdk" />

@@ -13,6 +13,7 @@
           <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
           <PrivateAssets>all</PrivateAssets>
         </PackageReference>
+        <PackageReference Include="MemoryPack" />
         <PackageReference Include="Microsoft.NET.Test.Sdk" />
         <PackageReference Include="ReportGenerator" />
         <PackageReference Include="xunit" />
@@ -21,6 +22,7 @@
         <PackageReference Include="FluentAssertions" />
         <PackageReference Include="Moq" />
         <PackageReference Include="Microsoft.Orleans.TestingHost" />
+        <PackageReference Include="xunit.SkippableFact" />
     </ItemGroup>
 
     <ItemGroup>

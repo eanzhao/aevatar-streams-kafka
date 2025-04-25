@@ -21,6 +21,7 @@
     <PackageVersion Include="AutoGen.Core" Version="0.2.1" />
     <PackageVersion Include="Azure.AI.TextAnalytics" Version="5.3.0" />
     <PackageVersion Include="JetBrains.Annotations" Version="2024.2.0" />
+    <PackageVersion Include="MemoryPack.Core" Version="1.21.4" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite.Core" Version="8.0.4" />
     <PackageVersion Include="Microsoft.Extensions.Options" Version="8.0.2" />
     <PackageVersion Include="Microsoft.Orleans.Serialization.Abstractions" Version="9.0.1" />
@@ -178,5 +179,7 @@
     <PackageVersion Include="Microsoft.SemanticKernel.PromptTemplates.Handlebars" Version="1.32.0" />
     <PackageVersion Include="Microsoft.SemanticKernel.Connectors.AzureAIInference" Version="1.33.0-beta" />
     <PackageVersion Include="Microsoft.SemanticKernel.Connectors.Google" Version="1.33.0-alpha" />
+    <PackageVersion Include="xunit.SkippableFact" Version="1.5.23" />
+    <PackageVersion Include="Xunit.SkippableFact" Version="1.5.23" />
   </ItemGroup>
 </Project>
